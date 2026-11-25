@@ -9,8 +9,8 @@
   <a href="https://github.com/Arjunsharmahehe/whistle-dictate"><img alt="GitHub stars" src="https://shieldcn.dev/github/stars/Arjunsharmahehe/whistle-dictate.svg?variant=secondary" /></a>
   <a href="https://github.com/Arjunsharmahehe/whistle-dictate/actions"><img alt="CI status" src="https://shieldcn.dev/github/ci/Arjunsharmahehe/whistle-dictate.svg?variant=secondary&branch=main" /></a>
   <a href="https://github.com/Arjunsharmahehe/whistle-dictate/commits/main"><img alt="last commit" src="https://shieldcn.dev/github/last-commit/Arjunsharmahehe/whistle-dictate.svg?variant=secondary" /></a>
-  <a href="https://www.python.org/downloads/"><img alt="python 3.11+" src="https://shieldcn.dev/badge/python-3.11+-3776AB.svg?variant=secondary" /></a>
-  <a href="https://hyprland.org"><img alt="platform Hyprland Wayland" src="https://shieldcn.dev/badge/platform-hyprland_wayland-2EA043.svg?variant=secondary" /></a>
+  <a href="https://www.python.org/downloads/"><img alt="python 3.11+" src="https://shieldcn.dev/badge/python-3.11+-3776AB.svg?variant=secondary&logo=python" /></a>
+  <a href="https://hyprland.org"><img alt="platform Hyprland Wayland" src="https://shieldcn.dev/badge/platform-hyprland_wayland-2EA043.svg?variant=secondary&logo=linux" /></a>
   <a href="https://github.com/Arjunsharmahehe/whistle-dictate/blob/main/LICENSE"><img alt="license MIT" src="https://shieldcn.dev/github/license/Arjunsharmahehe/whistle-dictate.svg?variant=secondary" /></a>
 </p>
 
