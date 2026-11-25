@@ -1,26 +1,23 @@
 """Tests for config validation (candidate 6)."""
 import io
-import os
-import tempfile
 import unittest
 from contextlib import redirect_stderr
+
+from .util import isolated_config_home
 
 
 class ConfigTest(unittest.TestCase):
     def setUp(self):
-        self._old_home = os.environ.get("XDG_CONFIG_HOME")
-        self.tmp = tempfile.mkdtemp(prefix="wd-cfg-")
-        os.environ["XDG_CONFIG_HOME"] = self.tmp
+        self._ctx = isolated_config_home()
+        self._ctx.__enter__()
 
     def tearDown(self):
-        if self._old_home is None:
-            os.environ.pop("XDG_CONFIG_HOME", None)
-        else:
-            os.environ["XDG_CONFIG_HOME"] = self._old_home
+        self._ctx.__exit__(None, None, None)
 
     def _write(self, body: str):
         from pathlib import Path
-        d = Path(self.tmp) / "whistle-dictate"
+        import os
+        d = Path(os.environ["XDG_CONFIG_HOME"]) / "whistle-dictate"
         d.mkdir(parents=True, exist_ok=True)
         (d / "config.toml").write_text(body)
 
@@ -61,6 +58,16 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(err, "")
         self.assertEqual(cfg["sensitivity"], 1.5)
         self.assertFalse(cfg["overlay"])
+
+    def test_accessors(self):
+        from whistle_dictate import config
+        cfg = {"sample_rate": 16000, "paste_method": "auto", "sensitivity": 1.0}
+        self.assertEqual(config.sample_rate(cfg), 16000)
+        self.assertEqual(config.paste_method(cfg), "auto")
+        self.assertEqual(config.sensitivity(cfg), 1.0)
+        self.assertEqual(config.paste_method({}), "auto")
+        self.assertEqual(config.SENSITIVITY_MIN, 0.3)
+        self.assertEqual(config.SENSITIVITY_MAX, 3.0)
 
 
 if __name__ == "__main__":

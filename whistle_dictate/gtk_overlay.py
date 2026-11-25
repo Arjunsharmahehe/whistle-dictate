@@ -6,7 +6,8 @@ no_focus + move. POPUP window = no taskbar, no focus; empty input shape =
 click-through. Reads rec.osd.json written by the record worker:
 
   {"phase": "recording|transcribing|done|error|dismiss",
-   "elapsed": seconds, "spec": [24 floats 0..1], "text": "...", "reason": "..."}
+   "elapsed": seconds, "peak": 0..1, "spec": [24 floats 0..1],
+   "text": "...", "reason": "..."}
   (schema owned by whistle_dictate.state; this module only reads it).
 
 30fps cairo redraw, lerped bars, peak caps, pulsing dot, group fade in/out.
@@ -88,14 +89,13 @@ class Overlay:
             self.fade = min(1.0, self.fade + 0.15)
             self.done_at = 0.0
         elif self.phase == _state.Phase.DISMISS:
-            # successful paste: no card, just fade out and quit
             if not self.done_at:
                 self.done_at = now
             age = now - self.done_at
             if age > 0.15:
                 self.fade -= 0.15
             if self.fade <= 0.0 and age > 0.15:
-                _state.osd_pid_path().unlink(missing_ok=True)
+                # pidfile removal belongs to session (single owner); we just exit
                 Gtk.main_quit()
                 return
         else:
@@ -107,11 +107,8 @@ class Overlay:
             if age > hold:
                 self.fade -= 0.1
             if self.fade <= 0.0 and age > hold:
-                _state.osd_pid_path().unlink(missing_ok=True)
                 Gtk.main_quit()
                 return False
-        if self.phase in (_state.Phase.DONE, _state.Phase.ERROR) and not self.done_at:
-            pass
         return True
 
     def frame(self):
@@ -123,7 +120,6 @@ class Overlay:
     def draw(self, _area, cr):
         now = time.time() - self.t0
         cr.push_group()
-        # glass card
         cr.set_source_rgba(15 / 255, 17 / 255, 23 / 255, 0.92)
         rounded(cr, 1, 1, W - 2, H - 2, 22)
         cr.fill_preserve()
@@ -131,7 +127,6 @@ class Overlay:
         cr.set_line_width(1.5)
         cr.stroke()
 
-        # header dot
         if self.phase == _state.Phase.ERROR:
             cr.set_source_rgb(*RED)
         elif self.phase == _state.Phase.DONE:
@@ -143,7 +138,6 @@ class Overlay:
         cr.arc(34, 30, 6, 0, math.pi * 2)
         cr.fill()
 
-        # labels
         cr.set_source_rgb(0.55, 0.59, 0.63)
         cr.select_font_face("Sans", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
         cr.set_font_size(11)
@@ -160,7 +154,7 @@ class Overlay:
         cr.show_text(timer)
 
         if self.phase == _state.Phase.TRANSCRIBING:
-            # simple spinner ring + label (new_sub_path: no stray line from text cursor)
+            # spinner ring + label
             cx, cy, r = W / 2, 82, 24
             cr.set_source_rgba(1, 1, 1, 0.12)
             cr.set_line_width(5)
@@ -195,8 +189,7 @@ class Overlay:
             cr.paint_with_alpha(max(0.0, min(1.0, self.fade)))
             return False
 
-        # spectrum bars with glow + falling peak caps
-        # (one shared vertical gradient: identical for every bar, so build once)
+        # one shared vertical gradient: identical for every bar, so build once
         area_x, area_y, area_w, area_h = 28, 56, W - 56, 64
         gap = 5
         bw = (area_w - gap * (NBARS - 1)) / NBARS

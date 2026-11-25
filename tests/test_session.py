@@ -3,26 +3,18 @@ only pid/result files in an isolated runtime dir (our own live pid stands
 in for a running worker; SIGTERM paths are not exercised here)."""
 import json
 import os
-import tempfile
 import unittest
 
-
-def _isolated():
-    tmp = tempfile.mkdtemp(prefix="wd-sess-")
-    os.environ["XDG_RUNTIME_DIR"] = tmp
-    return tmp
+from .util import isolated_runtime_dir
 
 
 class SessionTest(unittest.TestCase):
     def setUp(self):
-        self._old = os.environ.get("XDG_RUNTIME_DIR")
-        _isolated()
+        self._ctx = isolated_runtime_dir()
+        self._ctx.__enter__()
 
     def tearDown(self):
-        if self._old is None:
-            os.environ.pop("XDG_RUNTIME_DIR", None)
-        else:
-            os.environ["XDG_RUNTIME_DIR"] = self._old
+        self._ctx.__exit__(None, None, None)
 
     def test_not_recording_initially(self):
         from whistle_dictate import session

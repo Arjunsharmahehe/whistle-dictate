@@ -81,6 +81,12 @@ whistle-dictate devices
 History: `~/.local/share/whistle-dictate/history.jsonl`
 State (pid/wav): `$XDG_RUNTIME_DIR/whistle-dictate/`
 
+## Tests
+
+```bash
+.venv/bin/python -m unittest discover -s tests -t .   # 40 tests, no mic/model/Hyprland needed
+```
+
 ## Benchmarks (upstream)
 
 11 ms TTFT, 1319 tok/s, 10 s audio on M4 Pro — vs Whisper base 73 ms / 266 tok/s at 145 MB.

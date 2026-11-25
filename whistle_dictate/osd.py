@@ -22,3 +22,11 @@ def show(icon: str, text: str) -> bool:
         return r.returncode == 0
     except Exception:
         return False
+
+
+def notify(msg: str) -> None:
+    """Short user feedback on Noctalia's card. Never raises."""
+    try:
+        show("microphone", " ".join(str(msg).split())[:60])
+    except Exception:
+        pass

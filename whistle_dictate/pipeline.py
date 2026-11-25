@@ -18,13 +18,25 @@ Conventions:
 """
 from __future__ import annotations
 
+from .config import paste_method as _paste_method
+
 MIN_SAMPLES = 1600
+
+
+def empty_clip(reason: str = "discarded: silent clip") -> dict:
+    """Result constructor: nothing worth transcribing was recorded."""
+    return {"ok": False, "reason": reason}
+
+
+def load_error(err) -> dict:
+    """Result constructor: the engine itself failed to load."""
+    return {"ok": False, "error": f"model load failed: {err}"}
 
 
 def transcribe_samples(samples, *, sample_rate: int, cfg: dict, engine) -> dict:
     """Transcribe, mapping every expected failure to a result dict (no raise)."""
     if samples is None or len(samples) < MIN_SAMPLES:
-        return {"ok": False, "reason": "discarded: silent clip"}
+        return empty_clip()
     try:
         res = engine.transcribe(samples,
                                 language=cfg.get("language"),
@@ -33,7 +45,7 @@ def transcribe_samples(samples, *, sample_rate: int, cfg: dict, engine) -> dict:
         return {"ok": False, "error": str(e)}
     text = (res.get("text") or "").strip()
     if not text:
-        return {"ok": False, "reason": "discarded: silent clip"}
+        return empty_clip()
     return {"ok": True, "text": text, "language": res.get("language"),
             "duration_s": round(len(samples) / sample_rate, 2),
             "ttft_ms": res.get("ttft_ms"), "decode_tps": res.get("decode_tps")}
@@ -50,6 +62,6 @@ def complete(samples, *, sample_rate: int, cfg: dict, engine,
               "duration_s": res.get("duration_s"),
               "ttft_ms": res.get("ttft_ms"),
               "decode_tps": res.get("decode_tps")})
-    pr = paste(res["text"], cfg.get("paste_method", "auto"))
+    pr = paste(res["text"], _paste_method(cfg))
     return {"ok": True, "text": res["text"], "method": pr.method,
             "delivered": pr.delivered, "language": res.get("language")}

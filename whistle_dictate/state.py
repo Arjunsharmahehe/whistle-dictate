@@ -64,6 +64,15 @@ def blank_spec() -> list[float]:
     return [0.0] * NBANDS
 
 
+def safe_unlink(*paths: Path) -> None:
+    """Best-effort unlink of any number of paths. Never raises."""
+    for p in paths:
+        try:
+            p.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+
 def write(phase: str, elapsed: float = 0.0, spec=None, peak: float = 0.0,
           text: str = "", reason: str = "") -> None:
     """Publish overlay state. Never raises — the worker must not die on UI."""

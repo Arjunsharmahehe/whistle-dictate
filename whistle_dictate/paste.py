@@ -25,8 +25,14 @@ class PasteResult:
     detail: str = ""
 
 
+_have_cache: dict = {}
+
+
 def have(cmd: str) -> bool:
-    return shutil.which(cmd) is not None
+    """Cached PATH probe (one paste = one process lifetime)."""
+    if cmd not in _have_cache:
+        _have_cache[cmd] = shutil.which(cmd) is not None
+    return _have_cache[cmd]
 
 
 def type_via_wtype(text: str) -> bool:
@@ -102,24 +108,26 @@ def send_shortcut_legacy(mod: str, key: str, disp: str) -> tuple[bool, str]:
 
 
 def _hypr_paste(terminal: bool = False) -> tuple[bool, list]:
-    """Send Ctrl+V (terminals: Ctrl+Shift+V). Returns (delivered, attempts)."""
-    attempts: list = []
+    """Send Ctrl+V (terminals: Ctrl+Shift+V). Returns (delivered, attempts).
+
+    Each Hyprland dispatch syntax is one row in the plan; the loop tries
+    them in order (modern Lua 0.57 first, legacy dispatch after).
+    """
+    plan: list = []
     mods_list = ("CTRL_SHIFT",) if terminal else ()
-    mods_list = mods_list + ("CTRL", "ctrl", "CONTROL")
-    for mods in mods_list:
+    for mods in mods_list + ("CTRL", "ctrl", "CONTROL"):
         for key in ("V", "v"):
-            ok, log = send_shortcut_modern(mods, key)
-            attempts.append(log)
-            if ok:
-                _debug_log(attempts, True)
-                return True, attempts
+            plan.append((send_shortcut_modern, (mods, key)))
     for mod, key in (("CTRL", "V"), ("ctrl", "v"), ("CONTROL", "V")):
         for disp in ("sendshortcut", "send_shortcut"):
-            ok, log = send_shortcut_legacy(mod, key, disp)
-            attempts.append(log)
-            if ok:
-                _debug_log(attempts, True)
-                return True, attempts
+            plan.append((send_shortcut_legacy, (mod, key, disp)))
+    attempts: list = []
+    for send, args in plan:
+        ok, log = send(*args)
+        attempts.append(log)
+        if ok:
+            _debug_log(attempts, True)
+            return True, attempts
     _debug_log(attempts, False)
     return False, attempts
 
@@ -163,7 +171,7 @@ def paste_via_clipboard(text: str) -> PasteResult:
 
 
 def _schedule_restore(old: bytes | None) -> None:
-    """Restore the previous clipboard after 0.6s (Hex does ~500ms)."""
+    """Restore the previous clipboard 0.6s after setting the new one."""
     def _restore():
         time.sleep(0.6)
         try:

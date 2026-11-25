@@ -2,8 +2,10 @@
 from __future__ import annotations
 from pathlib import Path
 
+from .config import SENSITIVITY_MIN, SENSITIVITY_MAX
+from .state import NBANDS
+
 TARGET_SR = 16000
-NBANDS = 24
 _FFT_N = 2048
 
 class Spectrum:
@@ -17,7 +19,7 @@ class Spectrum:
 
     def __init__(self, nbands: int = NBANDS, sensitivity: float = 1.0):
         self.n = nbands
-        self.sens = max(0.3, min(3.0, float(sensitivity)))
+        self.sens = max(SENSITIVITY_MIN, min(SENSITIVITY_MAX, float(sensitivity)))
         self.floor = None
         self.floor_broad = None
         self.ref = 1e-6

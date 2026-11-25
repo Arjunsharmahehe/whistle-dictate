@@ -17,19 +17,12 @@ import json
 import sys
 import time
 
-from .config import load_config, ensure_dirs
+from .config import load_config, ensure_dirs, sample_rate, paste_method
 from . import history as hist
 from . import session
 from . import state
-
-
-def notify(msg: str) -> None:
-    """User feedback via Noctalia's top-center OSD card (not a notification)."""
-    try:
-        from . import osd as _osd
-        _osd.show("microphone", " ".join(str(msg).split())[:60])
-    except Exception:
-        pass
+from . import worker
+from .osd import notify
 
 
 def cmd_start(args) -> int:
@@ -39,9 +32,7 @@ def cmd_start(args) -> int:
         notify("already recording")
         print("already recording", flush=True)
         return 0
-    state.stop_path().unlink(missing_ok=True)
-    state.result_path().unlink(missing_ok=True)
-    state.osd_path().unlink(missing_ok=True)
+    state.safe_unlink(state.stop_path(), state.result_path(), state.osd_path())
     state.write(state.Phase.RECORDING, elapsed=0.0)
     # overlay first (instant card), then the worker: both detached.
     # Skipped when overlay=false (headless: saves the ~65MB card process).
@@ -52,156 +43,16 @@ def cmd_start(args) -> int:
     return 0
 
 
-def cmd__record(args) -> int:
-    """Internal worker: records mic AND preloads Whistle at once, then
-    transcribes + pastes + notifies on stop. Do not bind directly."""
-    import threading
-    ensure_dirs()
-    from .config import load_config
-    from .engine import get_whistle
-    from .paste import paste_text
-    from . import history as _hist
-    from . import pipeline as _pipeline
-
-    cfg = load_config()
-    sr = int(cfg.get("sample_rate", 16000))
-    result: dict = {}
-
-    def _write_result():
-        try:
-            state.result_path().write_text(json.dumps(result, ensure_ascii=False))
-        except Exception:
-            pass
-
-    def _fail(reason: str, notify_msg: str | None = None) -> int:
-        result.update({"ok": False, "error": reason} if notify_msg else
-                      {"ok": False, "reason": reason})
-        _write_result()
-        state.write(state.Phase.ERROR, elapsed=time.time() - t0,
-                    reason=reason[:80])
-        notify(notify_msg or reason)
-        try:
-            state.pid_path().unlink(missing_ok=True)
-        except Exception:
-            pass
-        return 1
-
-    t0 = time.time()  # set before _fail can run
-    from .audio import resolve_mic
-    try:
-        mic_dev = resolve_mic(cfg.get("mic"))
-    except Exception as e:
-        return _fail(str(e))
-
-    try:
-        import sounddevice as sd
-        import numpy as np
-        frames: list = []
-        live = {"peak": 0.0}
-
-        def _cb(data, nframes, t, status):
-            frames.append(data.copy())
-            try:
-                live["peak"] = float(np.abs(data).max())
-            except Exception:
-                pass
-
-        stream = sd.InputStream(samplerate=sr, channels=1, dtype="float32", device=mic_dev,
-                                callback=_cb)
-        stream.start()
-    except Exception as e:
-        return _fail(f"mic open failed: {e}", f"mic failed: {e}")
-
-    # Preload the 16.9 MB model WHILE recording — it is hot by stop time.
-    loaded: dict = {}
-
-    def _load():
-        try:
-            loaded["w"] = get_whistle()
-        except Exception as e:
-            loaded["err"] = e
-
-    loader = threading.Thread(target=_load, daemon=True)
-    loader.start()
-    # Live spectrum feed for the overlay (20 Hz); overlay lerps to 60fps.
-    # Spectrum holds the adaptive noise floor, so one instance per session.
-    from .audio import Spectrum
-    import numpy as np
-    tracker = Spectrum(sensitivity=float(cfg.get("sensitivity", 1.0)))
-    roll = np.zeros(0, dtype=np.float32)
-    consumed = 0
-    spec = [0.0] * 24
-    last_feed = 0.0
-    stopfile = state.stop_path()
-    while not stopfile.exists():
-        time.sleep(0.05)
-        now = time.time()
-        if len(frames) > consumed:
-            chunk = np.concatenate(frames[consumed:], axis=0).reshape(-1)
-            consumed = len(frames)
-            roll = np.concatenate([roll, chunk])[-8192:]
-        if now - last_feed >= 0.05:
-            last_feed = now
-            try:
-                spec = tracker.analyze(roll[-4096:])
-            except Exception:
-                pass
-            state.write(state.Phase.RECORDING, elapsed=now - t0,
-                        spec=spec, peak=float(live.get("peak", 0.0)))
-            live["peak"] = 0.0
-    state.write(state.Phase.TRANSCRIBING, elapsed=time.time() - t0, spec=spec)
-    try:
-        stream.stop()
-        stream.close()
-    except Exception:
-        pass
-    loader.join(timeout=120)
-
-    try:
-        if not frames:
-            result = {"ok": False, "reason": "discarded: no audio"}
-        else:
-            import gc
-            import numpy as np
-            samples = np.concatenate(frames, axis=0).reshape(-1)
-            # recording buffers no longer needed — drop them before the
-            # model runs so transcribe peaks lower.
-            frames.clear()
-            del roll, tracker, spec
-            gc.collect()
-            if "err" in loaded:
-                result = {"ok": False, "error": f"model load failed: {loaded['err']}"}
-            else:
-                engine = loaded.get("w") or get_whistle()
-                result = _pipeline.complete(
-                    samples, sample_rate=sr, cfg=cfg, engine=engine,
-                    remember=_hist.append, paste=paste_text)
-                if result.get("ok"):
-                    if result.get("delivered"):
-                        # success: no card — the pasted text is the confirmation
-                        state.write(state.Phase.DISMISS, elapsed=time.time() - t0)
-                    else:
-                        state.write(state.Phase.DONE, elapsed=time.time() - t0,
-                                    text=result["text"])
-                        notify("in clipboard — press Ctrl+V to paste")
-    except Exception as e:
-        result = {"ok": False, "error": str(e)}
-        state.write(state.Phase.ERROR, elapsed=time.time() - t0, reason=str(e)[:80])
-        notify(f"transcription failed: {e}")
+def format_result(result: dict, *, paste: bool, print_text: bool) -> str:
+    """Single home for user-visible result rendering (success and failure)."""
     if not result.get("ok"):
-        state.write(state.Phase.ERROR, elapsed=time.time() - t0,
-                    reason=str(result.get("reason") or result.get("error", "failed"))[:80])
-        notify(result.get("reason") or result.get("error", "failed"))
-    _write_result()
-    try:
-        state.pid_path().unlink(missing_ok=True)
-    except Exception:
-        pass
-    try:
-        stopfile.unlink(missing_ok=True)
-    except Exception:
-        pass
-    return 0 if result.get("ok") else 1
+        return str(result.get("reason") or result.get("error", "failed"))
+    if print_text or not paste:
+        return result["text"]
+    msg = f"pasted via {result.get('method')}: {result['text']}"
+    if "delivered" in result and not result.get("delivered"):
+        msg += " (keystroke not delivered — press Ctrl+V)"
+    return msg
 
 
 def _finish(paste: bool, print_text: bool) -> int:
@@ -216,14 +67,8 @@ def _finish(paste: bool, print_text: bool) -> int:
         return 1
     # let the overlay flash its done/error card, then make sure it exits
     session.reap_overlay()
-    if not result.get("ok"):
-        print(result.get("reason") or result.get("error", "failed"), flush=True)
-        return 1
-    if print_text or not paste:
-        print(result["text"], flush=True)
-    else:
-        print(f"pasted via {result.get('method')}: {result['text']}", flush=True)
-    return 0
+    print(format_result(result, paste=paste, print_text=print_text), flush=True)
+    return 0 if result.get("ok") else 1
 
 
 def cmd_stop(args) -> int:
@@ -267,18 +112,17 @@ def cmd_listen(args) -> int:
     from .pipeline import complete
     ensure_dirs()
     cfg = load_config()
-    sr = int(cfg.get("sample_rate", 16000))
+    sr = sample_rate(cfg)
     samples = record_blocking(duration_s=args.duration, sample_rate=sr)
     res = complete(samples, sample_rate=sr, cfg=cfg, engine=get_whistle(),
                    remember=hist.append, paste=paste_text)
     if not res.get("ok"):
-        print(res.get("reason") or res.get("error", "failed"), flush=True)
+        print(format_result(res, paste=False, print_text=True), flush=True)
         return 1
-    if args.print or args.no_paste:
-        print(res["text"], flush=True)
-    else:
+    if not (args.print or args.no_paste):
         notify(f"{res['text'][:120]}")
-        print(f"pasted via {res.get('method')}: {res['text']}", flush=True)
+    print(format_result(res, paste=not args.no_paste,
+                        print_text=args.print), flush=True)
     return 0
 
 
@@ -325,7 +169,7 @@ def cmd_status(args) -> int:
         "language": cfg.get("language") or "auto-detect",
         "paste": {
             "wtype": have("wtype"), "wl-copy": have("wl-copy"),
-            "hyprctl": have("hyprctl"), "method": cfg.get("paste_method"),
+            "hyprctl": have("hyprctl"), "method": paste_method(cfg),
         },
     }
     print(json.dumps(st, indent=2 if not args.json else None, ensure_ascii=False))
@@ -360,8 +204,10 @@ def cmd_paste_last(args) -> int:
     if not t:
         print("no dictations yet", flush=True)
         return 1
-    m = paste_text(t, method=cfg.get("paste_method", "auto"))
-    print(f"pasted via {m.method} (delivered={m.delivered}): {t}", flush=True)
+    m = paste_text(t, method=paste_method(cfg))
+    print(format_result({"ok": True, "text": t, "method": m.method,
+                         "delivered": m.delivered},
+                        paste=True, print_text=False), flush=True)
     return 0
 
 
@@ -384,7 +230,7 @@ def cmd_mic_test(args) -> int:
     except Exception as e:
         print(str(e), flush=True)
         return 2
-    sr = int(cfg.get("sample_rate", 16000))
+    sr = sample_rate(cfg)
     print(f"mic device: {mic_dev or 'system default'} — speak now (6s)…", flush=True)
     peak_hold = 0.0
     try:
@@ -430,7 +276,7 @@ def build_parser() -> argparse.ArgumentParser:
     pl = sub.add_parser("paste-last", help="paste last dictation again"); pl.set_defaults(fn=cmd_paste_last)
     dv = sub.add_parser("devices", help="list mic devices"); dv.set_defaults(fn=cmd_devices)
     mt = sub.add_parser("mic-test", help="live mic level meter (speak to test)"); mt.set_defaults(fn=cmd_mic_test)
-    rec = sub.add_parser("_record", help=argparse.SUPPRESS); rec.set_defaults(fn=cmd__record)
+    rec = sub.add_parser("_record", help=argparse.SUPPRESS); rec.set_defaults(fn=worker.cmd__record)
     return ap
 
 

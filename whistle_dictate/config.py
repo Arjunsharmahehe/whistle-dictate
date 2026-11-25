@@ -14,7 +14,7 @@ def data_dir() -> Path:
     return Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")) / APP
 
 def state_dir() -> Path:
-    # pidfile + in-progress wav live in /tmp (or XDG_RUNTIME_DIR)
+    # pidfile + result/state files live in the runtime dir (fresh per login)
     base = os.environ.get("XDG_RUNTIME_DIR", "/tmp")
     return Path(base) / APP
 
@@ -48,6 +48,9 @@ def load_config() -> dict:
     return cfg
 
 
+SENSITIVITY_MIN, SENSITIVITY_MAX = 0.3, 3.0
+
+
 def _validate(cfg: dict, path) -> None:
     """Clamp/coerce known keys so a bad value degrades visibly, not silently."""
     try:
@@ -56,15 +59,31 @@ def _validate(cfg: dict, path) -> None:
         print(f"whistle-dictate: bad sensitivity {cfg.get('sensitivity')!r} in {path}; using 1.0",
               file=sys.stderr, flush=True)
         s = 1.0
-    if not 0.3 <= s <= 3.0:
-        print(f"whistle-dictate: sensitivity {s} out of range 0.3..3.0; clamping",
+    if not SENSITIVITY_MIN <= s <= SENSITIVITY_MAX:
+        print(f"whistle-dictate: sensitivity {s} out of range "
+              f"{SENSITIVITY_MIN}..{SENSITIVITY_MAX}; clamping",
               file=sys.stderr, flush=True)
-        s = max(0.3, min(3.0, s))
+        s = max(SENSITIVITY_MIN, min(SENSITIVITY_MAX, s))
     cfg["sensitivity"] = s
     if not isinstance(cfg.get("overlay", True), bool):
         print(f"whistle-dictate: overlay must be true/false in {path}; using true",
               file=sys.stderr, flush=True)
         cfg["overlay"] = True
+
+
+def sample_rate(cfg: dict) -> int:
+    """Validated sample rate (single home for the 16000 default)."""
+    return int(cfg.get("sample_rate", 16000))
+
+
+def paste_method(cfg: dict) -> str:
+    """Validated paste method (single home for the 'auto' default)."""
+    return cfg.get("paste_method", "auto") or "auto"
+
+
+def sensitivity(cfg: dict) -> float:
+    """Validated gate sensitivity (already clamped by _validate)."""
+    return float(cfg.get("sensitivity", 1.0))
 
 def ensure_dirs() -> tuple[Path, Path, Path]:
     c, d, s = config_dir(), data_dir(), state_dir()

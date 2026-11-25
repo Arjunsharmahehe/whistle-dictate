@@ -86,5 +86,16 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(res["method"], "clipboard-only")
 
 
+    def test_constructors(self):
+        from whistle_dictate import pipeline as p
+        self.assertEqual(p.empty_clip(),
+                         {"ok": False, "reason": "discarded: silent clip"})
+        self.assertEqual(p.empty_clip("custom"),
+                         {"ok": False, "reason": "custom"})
+        err = p.load_error(ValueError("x"))
+        self.assertFalse(err["ok"])
+        self.assertIn("model load failed", err["error"])
+
+
 if __name__ == "__main__":
     unittest.main()
