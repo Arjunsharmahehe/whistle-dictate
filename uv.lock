@@ -1081,6 +1081,7 @@ dependencies = [
     { name = "numpy", version = "2.5.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "sounddevice" },
     { name = "soundfile" },
+    { name = "tomli", marker = "python_full_version < '3.11'" },
 ]
 
 [package.metadata]
@@ -1089,4 +1090,5 @@ requires-dist = [
     { name = "numpy", specifier = ">=1.24" },
     { name = "sounddevice", specifier = ">=0.5" },
     { name = "soundfile", specifier = ">=0.12" },
+    { name = "tomli", marker = "python_full_version < '3.11'", specifier = ">=2.0" },
 ]

@@ -3,7 +3,11 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
-import tomllib
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10: stdlib tomllib is 3.11+
+    import tomli as tomllib
 
 APP = "whistle-dictate"
 
