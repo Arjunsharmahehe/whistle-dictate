@@ -3,13 +3,12 @@ name = "whistle-dictate"
 version = "0.1.0"
 description = "Local voice dictation for Hyprland using Cactus Whistle (16.9 MB) — Hex-like, in Python"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
   "cactus-compute[mic]>=4.0",
   "numpy>=1.24",
   "sounddevice>=0.5",
   "soundfile>=0.12",
-  "tomli>=2.0; python_version < '3.11'",
 ]
 
 [project.scripts]

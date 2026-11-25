@@ -9,7 +9,7 @@
   <a href="https://github.com/Arjunsharmahehe/whistle-dictate"><img alt="GitHub stars" src="https://shieldcn.dev/github/stars/Arjunsharmahehe/whistle-dictate.svg?variant=secondary" /></a>
   <a href="https://github.com/Arjunsharmahehe/whistle-dictate/actions"><img alt="CI status" src="https://shieldcn.dev/github/ci/Arjunsharmahehe/whistle-dictate.svg?variant=secondary&branch=main" /></a>
   <a href="https://github.com/Arjunsharmahehe/whistle-dictate/commits/main"><img alt="last commit" src="https://shieldcn.dev/github/last-commit/Arjunsharmahehe/whistle-dictate.svg?variant=secondary" /></a>
-  <a href="https://www.python.org/downloads/"><img alt="python 3.10+" src="https://shieldcn.dev/badge/python-3.10+-3776AB.svg?variant=secondary" /></a>
+  <a href="https://www.python.org/downloads/"><img alt="python 3.11+" src="https://shieldcn.dev/badge/python-3.11+-3776AB.svg?variant=secondary" /></a>
   <a href="https://hyprland.org"><img alt="platform Hyprland Wayland" src="https://shieldcn.dev/badge/platform-hyprland_wayland-2EA043.svg?variant=secondary" /></a>
   <a href="https://github.com/Arjunsharmahehe/whistle-dictate/blob/main/LICENSE"><img alt="license MIT" src="https://shieldcn.dev/github/license/Arjunsharmahehe/whistle-dictate.svg?variant=secondary" /></a>
 </p>
@@ -72,7 +72,7 @@ yay -S wtype wl-clipboard        # typing + clipboard fallback
 # (Arch: python-gobject, gtk3, python-cairo — usually already present)
 ```
 
-**Python:** 3.10+ via [uv](https://docs.astral.sh/uv/). The venv needs no GUI toolkit.
+**Python:** 3.11+ via [uv](https://docs.astral.sh/uv/). The venv needs no GUI toolkit.
 
 ## Quickstart
 
@@ -223,7 +223,7 @@ tests/              52 stdlib tests (no mic/model/Hyprland needed)
 ## Roadmap
 
 - [ ] Publish to PyPI / `uv tool install`
-- [x] CI (stdlib unittest matrix, 3.10–3.13)
+- [x] CI (stdlib unittest matrix, 3.11–3.13)
 - [ ] CI hardening (ruff + mypy)
 - [ ] Sway/river smoke reports
 - [ ] macOS paste + notifier backends
