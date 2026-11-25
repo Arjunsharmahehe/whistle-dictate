@@ -6,12 +6,12 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/Arjunsharmahehe/whistle-dictate"><img alt="GitHub stars" src="https://shieldcn.dev/github/stars/Arjunsharmahehe/whistle-dictate.svg?variant=secondary" /></a>
+  <a href="https://github.com/Arjunsharmahehe/whistle-dictate/actions"><img alt="CI status" src="https://shieldcn.dev/github/ci/Arjunsharmahehe/whistle-dictate.svg?variant=secondary&branch=main" /></a>
+  <a href="https://github.com/Arjunsharmahehe/whistle-dictate/commits/main"><img alt="last commit" src="https://shieldcn.dev/github/last-commit/Arjunsharmahehe/whistle-dictate.svg?variant=secondary" /></a>
   <a href="https://www.python.org/downloads/"><img alt="python 3.10+" src="https://shieldcn.dev/badge/python-3.10+-3776AB.svg?variant=secondary" /></a>
   <a href="https://hyprland.org"><img alt="platform Hyprland Wayland" src="https://shieldcn.dev/badge/platform-hyprland_wayland-2EA043.svg?variant=secondary" /></a>
-  <a href="https://cactuscompute.com/blog/whistle"><img alt="engine Whistle 16.9MB local" src="https://shieldcn.dev/badge/engine-whistle_16.9MB_local-7C3AED.svg?variant=secondary" /></a>
-  <a href="#privacy"><img alt="audio 100 percent local" src="https://shieldcn.dev/badge/audio-100_percent_local-0891B2.svg?variant=secondary" /></a>
-  <a href="LICENSE"><img alt="license MIT" src="https://shieldcn.dev/badge/license-MIT-94A3B8.svg?variant=secondary" /></a>
-  <a href="#tests"><img alt="tests 52 passing" src="https://shieldcn.dev/badge/tests-52_passing-16A34A.svg?variant=secondary" /></a>
+  <a href="https://github.com/Arjunsharmahehe/whistle-dictate/blob/main/LICENSE"><img alt="license MIT" src="https://shieldcn.dev/github/license/Arjunsharmahehe/whistle-dictate.svg?variant=secondary" /></a>
 </p>
 
 <p align="center"><em>Press a hotkey, speak, release — your words appear at the cursor. Nothing leaves your machine.</em></p>
@@ -223,7 +223,8 @@ tests/              52 stdlib tests (no mic/model/Hyprland needed)
 ## Roadmap
 
 - [ ] Publish to PyPI / `uv tool install`
-- [ ] CI (ruff + mypy + pytest matrix)
+- [x] CI (stdlib unittest matrix, 3.10–3.13)
+- [ ] CI hardening (ruff + mypy)
 - [ ] Sway/river smoke reports
 - [ ] macOS paste + notifier backends
 - [ ] Windows paste + notifier backends

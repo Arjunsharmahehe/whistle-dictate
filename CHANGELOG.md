@@ -4,6 +4,8 @@ All notable changes to whistle-dictate. Format follows Keep a Changelog; version
 
 ## [Unreleased]
 
+- Live README badges (stars, CI, last commit, license)
+- CI workflow: stdlib unittest matrix on 3.10–3.13
 - Cross-platform backend seams (`transcribers/`, `audio_sources/`, `paste_backends/`, `overlays/`, `notifiers/`, `platform.py`) with Hyprland defaults unchanged
 - `status --json` reports resolved platform + backends
 
