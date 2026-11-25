@@ -30,6 +30,7 @@
 - [Usage](#usage)
 - [Config](#config)
 - [Backends](#backends)
+- [Footprint](#footprint)
 - [Troubleshooting](#troubleshooting)
 - [Tests](#tests)
 - [Roadmap](#roadmap)
@@ -132,7 +133,20 @@ Same flow on every OS, different backends. Only Hyprland/Linux is fully wired. A
 | Overlay (`overlays/`) | `gtk` on Linux, `noop` elsewhere | aqua/windows native card |
 | Notify (`notifiers/`) | `noctalia` on Hyprland, `noop` elsewhere | notification center, toast |
 
-Details: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Benchmarks (upstream): 11 ms TTFT, 1319 tok/s, 10 s audio on M4 Pro, vs Whisper base 73 ms / 266 tok/s at 145 MB.
+Details: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+## Footprint
+
+Measured on this box, not marketing. No daemon, so idle is zero by construction.
+
+| Phase | RAM | Notes |
+|---|---|---|
+| Idle | 0 MB | Every process exits after each run |
+| Recording | ~165 MB | Worker ~100 (mic plus preloaded model) plus card ~65 |
+| Transcribe peak | ~84 MB | Peak VmRSS transcribing a file |
+| Disk | ~130 MB | venv 113 plus model 17 |
+
+Headless (`overlay = false`) drops the ~65 MB card. For reference, upstream: Whistle 16.9 MB, 11 ms TTFT, 1319 tok/s vs Whisper base 145 MB, 73 ms, 266 tok/s (10 s audio, M4 Pro).
 
 ## Troubleshooting
 
