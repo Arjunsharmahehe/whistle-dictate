@@ -18,7 +18,7 @@ back to `wl-copy` + `hyprctl sendshortcut`.
 ## 2. Clone + Python env
 
 ```bash
-git clone <your-fork-url> whistle-dictate
+git clone https://github.com/Arjunsharmahehe/whistle-dictate.git whistle-dictate
 cd whistle-dictate
 uv sync
 ```
