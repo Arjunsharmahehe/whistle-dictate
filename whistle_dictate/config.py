@@ -21,12 +21,15 @@ def state_dir() -> Path:
 DEFAULTS = {
     "language": None,          # None = auto-detect; else en/de/fr/es/it/nl/pl
     "keywords": [],            # vocabulary biasing, e.g. ["Siobhan", "Krzysztof"]
-    "paste_method": "auto",    # auto | wtype | clipboard
+    "paste_method": "auto",    # auto | wtype | clipboard | hyprland | stdout
+    "transcriber": "whistle",  # transcription engine; only "whistle" today
+    "audio_source": "sounddevice",  # mic backend; only "sounddevice" today
+    "notifier": "auto",        # auto | noctalia | noop (short OSD feedback)
     "sample_rate": 16000,
     "channels": 1,
     "mic": None,               # None = system default; else sounddevice index or name substring
     "sensitivity": 1.0,        # spectrum gate: >1 opens easier, <1 stricter (0.3..3)
-    "overlay": True,           # floating waveform card; false = headless (saves ~65MB)
+    "overlay": True,           # true = auto card (gtk on Linux); false/"noop" = headless
 }
 
 def load_config() -> dict:
@@ -65,10 +68,17 @@ def _validate(cfg: dict, path) -> None:
               file=sys.stderr, flush=True)
         s = max(SENSITIVITY_MIN, min(SENSITIVITY_MAX, s))
     cfg["sensitivity"] = s
-    if not isinstance(cfg.get("overlay", True), bool):
-        print(f"whistle-dictate: overlay must be true/false in {path}; using true",
+    ov = cfg.get("overlay", True)
+    if not isinstance(ov, (bool, str)):
+        print(f"whistle-dictate: overlay must be true/false or a backend name in {path}; using true",
               file=sys.stderr, flush=True)
         cfg["overlay"] = True
+    for key in ("transcriber", "audio_source", "notifier", "paste_method"):
+        v = cfg.get(key)
+        if v is not None and not isinstance(v, str):
+            print(f"whistle-dictate: {key} must be a string in {path}; using default",
+                  file=sys.stderr, flush=True)
+            cfg[key] = DEFAULTS[key]
 
 
 def sample_rate(cfg: dict) -> int:
@@ -79,6 +89,21 @@ def sample_rate(cfg: dict) -> int:
 def paste_method(cfg: dict) -> str:
     """Validated paste method (single home for the 'auto' default)."""
     return cfg.get("paste_method", "auto") or "auto"
+
+
+def transcriber_name(cfg: dict) -> str:
+    """Validated transcriber name (single home for the 'whistle' default)."""
+    return cfg.get("transcriber", "whistle") or "whistle"
+
+
+def audio_source_name(cfg: dict) -> str:
+    """Validated audio source name (single home for 'sounddevice')."""
+    return cfg.get("audio_source", "sounddevice") or "sounddevice"
+
+
+def notifier_name(cfg: dict) -> str:
+    """Validated notifier name (single home for the 'auto' default)."""
+    return cfg.get("notifier", "auto") or "auto"
 
 
 def sensitivity(cfg: dict) -> float:
@@ -98,9 +123,12 @@ def ensure_dirs() -> tuple[Path, Path, Path]:
             '# language = "en"\n'
             '# vocabulary biasing (Hex calls this Vocabulary)\n'
             '# keywords = ["Siobhan", "Krzysztof"]\n'
-            '# paste_method = "auto"  # auto | wtype | clipboard\n'
+            '# paste_method = "auto"  # auto | wtype | clipboard | hyprland | stdout\n'
+            '# transcriber = "whistle"  # transcription engine (only "whistle" today)\n'
+            '# audio_source = "sounddevice"  # mic backend (only "sounddevice" today)\n'
+            '# notifier = "auto"  # auto | noctalia | noop\n'
             '# mic = null  # pin input: sounddevice index or name substring (see `whistle-dictate devices`)\n'
             '# sensitivity = 1.0  # spectrum gate strictness for noisy rooms\n'
-            '# overlay = true  # floating waveform card; false = headless, saves ~65MB\n'
+            '# overlay = true  # floating card (gtk on Linux); false = headless\n'
         )
     return c, d, s

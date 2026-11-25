@@ -1,46 +1,18 @@
-"""Whistle engine behind a seam.
+"""Whistle engine behind a seam (back-compat shim).
 
-Previously this was a locked module-global singleton: every caller got the
-same object and tests could not substitute a stub without the 17MB model.
-Now the engine is a small constructed module — `WhistleEngine(weights)` —
-and `get_whistle()` is just the default shared instance for the CLI. Any
-caller that accepts `engine=` can run against a fake, which is what makes
-the record→transcribe→paste pipeline testable (see pipeline.py).
+New code should use `whistle_dictate.transcribers` (the `Transcriber`
+protocol + `get_transcriber` factory). This module stays so existing
+imports (`engine.get_whistle`, `engine.WhistleEngine`,
+`engine.transcribe_audio`) keep working on Hyprland unchanged.
 """
 from __future__ import annotations
-import threading
 
-_lock = threading.Lock()
-_default = None
+from .transcribers.base import Transcriber, TranscriptionResult
+from .transcribers.whistle import WhistleEngine, WhistleTranscriber
+from .transcribers import available, create, get_transcriber, transcribe_audio
 
+get_whistle = get_transcriber
 
-class WhistleEngine:
-    """Local Whistle transcription engine (16.9 MB .cact, lazy-loaded)."""
-
-    def __init__(self, weights=None):
-        import cactus
-        self._w = cactus.Whistle() if weights is None else cactus.Whistle(weights)
-
-    def transcribe(self, samples, language=None, keywords=None,
-                   word_timestamps=False) -> dict:
-        return self._w.transcribe(samples, language=language,
-                                  keywords=keywords,
-                                  word_timestamps=word_timestamps)
-
-
-def get_whistle() -> WhistleEngine:
-    """Default shared engine for production use (loaded once, then hot)."""
-    global _default
-    with _lock:
-        if _default is None:
-            _default = WhistleEngine()
-        return _default
-
-
-def transcribe_audio(samples, language=None, keywords=None,
-                     word_timestamps=False, engine=None) -> dict:
-    """Transcribe samples. Pass `engine=` (anything with .transcribe) in tests."""
-    eng = engine or get_whistle()
-    kw = keywords or None
-    return eng.transcribe(samples, language=language, keywords=kw,
-                          word_timestamps=word_timestamps)
+__all__ = ["Transcriber", "TranscriptionResult", "WhistleEngine",
+           "WhistleTranscriber", "available", "create", "get_transcriber",
+           "get_whistle", "transcribe_audio"]

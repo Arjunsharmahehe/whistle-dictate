@@ -4,30 +4,47 @@ This is the second program in the project (the first is the CLI adapter):
 spawned detached by `session.spawn_worker`, it records until the stop file
 appears, then runs the pipeline and exits. It speaks to the outside world
 only through seams — `state` (overlay + result files), `pipeline`
-(transcribe→history→paste), and `osd.notify` (user feedback).
+(transcribe→history→paste), backends (`transcribers`, `audio_sources`,
+`paste_backends`, `notifiers`), and `platform` (OS detection).
+
+Platform behavior today: Hyprland/Linux (sounddevice mic, Whistle engine,
+Hyprland paste, Noctalia notify). Other OSes reuse the same flow with
+different backends chosen by config + factory defaults.
 """
 from __future__ import annotations
 import json
 import time
 
 from .config import ensure_dirs, load_config, sample_rate, sensitivity as _sensitivity
+from .config import audio_source_name, notifier_name, transcriber_name
 from . import history as _hist
 from . import pipeline as _pipeline
 from . import state
-from .osd import notify
 
 
 def cmd__record(args) -> int:
-    """Record mic AND preload Whistle at once, then transcribe+paste+notify."""
+    """Record mic AND preload the transcriber at once, then transcribe+paste+notify."""
     import threading
     ensure_dirs()
 
-    from .audio import Spectrum, resolve_mic
-    from .engine import get_whistle
-    from .paste import paste_text
+    from .audio import Spectrum
+    from .audio_sources import get_source
+    from .transcribers import get_transcriber
+    from .paste_backends import get_backend as get_paste_backend
+    from .notifiers import get_backend as get_notifier
 
     cfg = load_config()
     sr = sample_rate(cfg)
+    audio = get_source({**cfg, "audio_source": audio_source_name(cfg)})
+    notifier = get_notifier({**cfg, "notifier": notifier_name(cfg)})
+    paste_backend = get_paste_backend(cfg)
+
+    def notify(msg: str) -> None:
+        try:
+            notifier.notify(msg)
+        except Exception:
+            pass
+
     result: dict = {}
 
     def _write_result():
@@ -50,7 +67,7 @@ def cmd__record(args) -> int:
         return 1
 
     try:
-        mic_dev = resolve_mic(cfg.get("mic"))
+        mic_dev = audio.resolve_mic(cfg.get("mic"))
     except Exception as e:
         return _fail(str(e), error=True)
 
@@ -73,12 +90,12 @@ def cmd__record(args) -> int:
     except Exception as e:
         return _fail(f"mic open failed: {e}", error=True)
 
-    # Preload the 16.9 MB model WHILE recording — it is hot by stop time.
+    # Preload the model WHILE recording — it is hot by stop time.
     loaded: dict = {}
 
     def _load():
         try:
-            loaded["w"] = get_whistle()
+            loaded["w"] = get_transcriber({**cfg, "transcriber": transcriber_name(cfg)})
         except Exception as e:
             loaded["err"] = e
 
@@ -132,10 +149,11 @@ def cmd__record(args) -> int:
             if "err" in loaded:
                 result = _pipeline.load_error(loaded["err"])
             else:
-                engine = loaded.get("w") or get_whistle()
+                from .transcribers import get_transcriber as _get
+                engine = loaded.get("w") or _get({**cfg, "transcriber": transcriber_name(cfg)})
                 result = _pipeline.complete(
                     samples, sample_rate=sr, cfg=cfg, engine=engine,
-                    remember=_hist.append, paste=paste_text)
+                    remember=_hist.append, paste=paste_backend.paste)
                 if result.get("ok"):
                     if result.get("delivered"):
                         # success: no card — the pasted text is the confirmation

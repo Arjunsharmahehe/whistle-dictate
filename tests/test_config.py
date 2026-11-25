@@ -47,10 +47,16 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(cfg["sensitivity"], 1.0)
 
     def test_bad_overlay_type(self):
-        self._write('overlay = "yes please"\n')
+        self._write('overlay = 123\n')
         cfg, err = self._load()
         self.assertIn("overlay must be true/false", err)
         self.assertTrue(cfg["overlay"])
+
+    def test_overlay_backend_names_accepted(self):
+        self._write('overlay = "noop"\n')
+        cfg, err = self._load()
+        self.assertEqual(err, "")
+        self.assertEqual(cfg["overlay"], "noop")
 
     def test_clean_config_silent(self):
         self._write('paste_method = "auto"\nsensitivity = 1.5\noverlay = false\n')

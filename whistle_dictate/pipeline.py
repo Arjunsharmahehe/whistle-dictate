@@ -8,10 +8,13 @@ flow — including every discard and fallback path — runs in tests with a stub
 engine in milliseconds.
 
 Conventions:
-- `engine`: anything with `.transcribe(samples, language, keywords)`
-  (a `WhistleEngine`, or a stub in tests).
+- `engine`: a `Transcriber` (see `transcribers/base.py`) or anything with
+  `.transcribe(samples, language, keywords)` returning either a
+  `TranscriptionResult` or the legacy `{"text", "language", ...}` dict
+  (a `WhistleTranscriber`, or a stub in tests).
 - `remember(entry)`: records one history entry (real: `history.append`).
-- `paste(text, method)`: returns a `PasteResult` (real: `paste.paste_text`).
+- `paste(text, method)`: returns a `PasteResult` (real: `paste.paste_text`,
+  or `paste_backends.paste_with`).
 - result dicts keep the on-disk shape the CLI already uses:
   `{"ok": True, "text", "method", "delivered", "language"}` or
   `{"ok": False, "reason"}` / `{"ok": False, "error"}`.
@@ -33,14 +36,31 @@ def load_error(err) -> dict:
     return {"ok": False, "error": f"model load failed: {err}"}
 
 
+def _coerce_result(res) -> dict:
+    """Accept TranscriptionResult or legacy dict; always return a plain dict."""
+    if res is None:
+        return {}
+    if hasattr(res, "to_dict") and callable(getattr(res, "to_dict")):
+        try:
+            return dict(res.to_dict())
+        except Exception:
+            pass
+    if isinstance(res, dict):
+        return res
+    try:
+        return {"text": str(res)}
+    except Exception:
+        return {}
+
+
 def transcribe_samples(samples, *, sample_rate: int, cfg: dict, engine) -> dict:
     """Transcribe, mapping every expected failure to a result dict (no raise)."""
     if samples is None or len(samples) < MIN_SAMPLES:
         return empty_clip()
     try:
-        res = engine.transcribe(samples,
-                                language=cfg.get("language"),
-                                keywords=cfg.get("keywords") or None)
+        res = _coerce_result(engine.transcribe(
+            samples, language=cfg.get("language"),
+            keywords=cfg.get("keywords") or None))
     except Exception as e:
         return {"ok": False, "error": str(e)}
     text = (res.get("text") or "").strip()

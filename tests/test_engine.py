@@ -45,7 +45,8 @@ class EngineTest(unittest.TestCase):
         from whistle_dictate import engine
         eng = engine.WhistleEngine()
         res = eng.transcribe([0.1] * 100, language="de", keywords=["x"])
-        self.assertEqual(res["text"], "fake transcript")
+        text = res["text"] if isinstance(res, dict) else res.text
+        self.assertEqual(text, "fake transcript")
         self.assertEqual(FakeWhistle.last_kwargs["language"], "de")
         self.assertEqual(FakeWhistle.last_kwargs["keywords"], ["x"])
 

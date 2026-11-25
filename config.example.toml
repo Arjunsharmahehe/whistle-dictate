@@ -1,0 +1,11 @@
+# None = auto-detect. Whistle langs: en, de, fr, es, it, nl, pl
+# language = "en"
+# vocabulary biasing (Hex calls this Vocabulary)
+# keywords = ["Siobhan", "Krzysztof"]
+# paste_method = "auto"  # auto | hyprland | wtype | clipboard | stdout
+# transcriber = "whistle"  # transcription engine (only "whistle" today)
+# audio_source = "sounddevice"  # mic backend (only "sounddevice" today)
+# notifier = "auto"  # auto | noctalia | noop
+# mic = null  # pin input: sounddevice index or name substring (see `whistle-dictate devices`)
+# sensitivity = 1.0  # spectrum gate strictness for noisy rooms, 0.3..3.0
+# overlay = true  # floating card (gtk on Linux); false = headless

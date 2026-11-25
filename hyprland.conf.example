@@ -1,13 +1,19 @@
+# whistle-dictate — Hyprland example (copy what you need, don't symlink)
+#
+# Install once: ln -sf /path/to/whistle-dictate/.venv/bin/whistle-dictate ~/.local/bin/
+# (or: uv tool install -e /path/to/whistle-dictate) so the binds below survive moves.
+
 # Toggle: one keypress to start, press again to stop + paste at cursor.
 # (True hold needs bindr, which Hyprland 0.57 Lua doesn't expose — toggle is
 # also what Hex docs recommend: release timing is unreliable with modifiers.)
-bind = ALT, Space, exec, /home/arjun/Projects/personal/whistle-dictate/.venv/bin/whistle-dictate toggle
-bind = CTRL, Space, exec, /home/arjun/Projects/personal/whistle-dictate/.venv/bin/whistle-dictate toggle
-bind = , End, exec, /home/arjun/Projects/personal/whistle-dictate/.venv/bin/whistle-dictate toggle
-# NOTE: this box runs Hyprland 0.57 Lua, so the live binds are in
-# ~/.config/hypr/config/binds.lua:
-#   hl.bind("ALT + Space", hl.dsp.exec_cmd(WD .. " toggle"))
+bind = ALT, Space, exec, ~/.local/bin/whistle-dictate toggle
+bind = CTRL, Space, exec, ~/.local/bin/whistle-dictate toggle
+bind = , End, exec, ~/.local/bin/whistle-dictate toggle
 
-# Pre-download Whistle's 16.9 MB .cact at login so the first dictation is instant
-# (live line is in ~/.config/hypr/config/autostart.lua):
-#   hl.exec_cmd(".../whistle-dictate warm")
+# Glass card: float, no focus steal, top-center (position via your layout).
+windowrule = float, title:^(wd-osd.*)$
+windowrule = nofocus, title:^(wd-osd.*)$
+
+# --- Hyprland 0.57 Lua equivalents (config/binds.lua + autostart.lua) ---
+# hl.bind("ALT + Space", hl.dsp.exec_cmd(WD .. " toggle"))  -- WD = "~/.local/bin/whistle-dictate"
+# hl.exec_cmd(WD .. " warm")  -- at login: pre-downloads whistle.cact so the first dictation is instant

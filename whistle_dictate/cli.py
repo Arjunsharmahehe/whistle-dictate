@@ -18,25 +18,45 @@ import sys
 import time
 
 from .config import load_config, ensure_dirs, sample_rate, paste_method
+from .config import audio_source_name, notifier_name, transcriber_name
 from . import history as hist
 from . import session
 from . import state
 from . import worker
-from .osd import notify
+from . import overlays as _overlays
+from . import notifiers as _notifiers
+
+
+def _notify(cfg: dict | None, msg: str) -> None:
+    """Short user feedback via the configured notifier. Never raises."""
+    try:
+        _notifiers.get_backend(cfg or {}).notify(msg)
+    except Exception:
+        pass
+
+
+def notify(msg: str) -> None:
+    """Back-compat notifier (Hyprland default). Prefer _notify(cfg, msg)."""
+    try:
+        _notify(load_config(), msg)
+    except Exception:
+        pass
 
 
 def cmd_start(args) -> int:
     cfg = load_config()
     ensure_dirs()
     if session.is_recording():
-        notify("already recording")
+        _notify(cfg, "already recording")
         print("already recording", flush=True)
         return 0
     state.safe_unlink(state.stop_path(), state.result_path(), state.osd_path())
     state.write(state.Phase.RECORDING, elapsed=0.0)
     # overlay first (instant card), then the worker: both detached.
-    # Skipped when overlay=false (headless: saves the ~65MB card process).
-    if cfg.get("overlay", True):
+    # overlay=false (or non-Linux default) skips the card process.
+    try:
+        _overlays.get_backend(cfg).spawn()
+    except Exception:
         session.spawn_overlay()
     pid = session.spawn_worker()
     print(f"recording started (pid {pid})… speak, then `whistle-dictate stop`", flush=True)
@@ -62,11 +82,17 @@ def _finish(paste: bool, print_text: bool) -> int:
         return 1
     if status == "timeout" or result is None:
         msg = "timed out waiting for transcription"
-        notify(msg)
+        try:
+            _notify(load_config(), msg)
+        except Exception:
+            pass
         print(msg, flush=True)
         return 1
     # let the overlay flash its done/error card, then make sure it exits
-    session.reap_overlay()
+    try:
+        _overlays.get_backend(load_config()).reap()
+    except Exception:
+        session.reap_overlay()
     print(format_result(result, paste=paste, print_text=print_text), flush=True)
     return 0 if result.get("ok") else 1
 
@@ -85,18 +111,20 @@ def cmd_toggle(args) -> int:
 
 def cmd_cancel(args) -> int:
     ensure_dirs()
+    cfg = load_config()
     session.cancel()
-    notify("dictation cancelled")
+    _notify(cfg, "dictation cancelled")
     print("cancelled", flush=True)
     return 0
 
 
 def cmd_warm(args) -> int:
-    """Pre-download + load Whistle so the first dictation is instant. For autostart."""
+    """Pre-download + load the transcriber so the first dictation is instant."""
     ensure_dirs()
-    from .engine import get_whistle
+    cfg = load_config()
+    from .transcribers import get_transcriber
     try:
-        get_whistle()
+        get_transcriber({**cfg, "transcriber": transcriber_name(cfg)})
     except Exception as e:
         print(f"warm failed: {e}", file=sys.stderr, flush=True)
         return 1
@@ -106,21 +134,23 @@ def cmd_warm(args) -> int:
 
 def cmd_listen(args) -> int:
     """Blocking record-until-Ctrl-C, then transcribe+paste. For testing."""
-    from .audio import record_blocking
-    from .engine import get_whistle
-    from .paste import paste_text
+    from .audio_sources import get_source
+    from .transcribers import get_transcriber
+    from .paste_backends import get_backend as get_paste_backend
     from .pipeline import complete
     ensure_dirs()
     cfg = load_config()
     sr = sample_rate(cfg)
-    samples = record_blocking(duration_s=args.duration, sample_rate=sr)
-    res = complete(samples, sample_rate=sr, cfg=cfg, engine=get_whistle(),
-                   remember=hist.append, paste=paste_text)
+    audio = get_source({**cfg, "audio_source": audio_source_name(cfg)})
+    samples = audio.record_blocking(duration_s=args.duration, sample_rate=sr)
+    res = complete(samples, sample_rate=sr, cfg=cfg,
+                   engine=get_transcriber({**cfg, "transcriber": transcriber_name(cfg)}),
+                   remember=hist.append, paste=get_paste_backend(cfg).paste)
     if not res.get("ok"):
         print(format_result(res, paste=False, print_text=True), flush=True)
         return 1
     if not (args.print or args.no_paste):
-        notify(f"{res['text'][:120]}")
+        _notify(cfg, f"{res['text'][:120]}")
     print(format_result(res, paste=not args.no_paste,
                         print_text=args.print), flush=True)
     return 0
@@ -128,18 +158,20 @@ def cmd_listen(args) -> int:
 
 def cmd_transcribe(args) -> int:
     from pathlib import Path as P
-    from .audio import load_wav_mono16k
-    from .engine import transcribe_audio
+    from .audio_sources import get_source
+    from .transcribers import transcribe_audio
     ensure_dirs()
     cfg = load_config()
     p = P(args.file)
     if not p.exists():
         print(f"no such file: {p}", file=sys.stderr)
         return 2
-    samples = load_wav_mono16k(p)
+    audio = get_source({**cfg, "audio_source": audio_source_name(cfg)})
+    samples = audio.load_wav_mono16k(p)
     lang = args.language or cfg.get("language")
     res = transcribe_audio(samples, language=lang, keywords=cfg.get("keywords") or None,
-                           word_timestamps=args.words)
+                           word_timestamps=args.words,
+                           cfg={**cfg, "transcriber": transcriber_name(cfg)})
     if args.json:
         print(json.dumps(res, ensure_ascii=False))
     else:
@@ -151,7 +183,9 @@ def cmd_transcribe(args) -> int:
 
 
 def cmd_status(args) -> int:
-    from .paste import have
+    from . import platform as _platform
+    from .transcribers import available as _trans_available
+    from .paste_backends import available as _paste_available
     cfg = load_config()
     pid = session.is_recording()
     try:
@@ -167,9 +201,17 @@ def cmd_status(args) -> int:
         "model": {"id": "whistle.cact", "size": "16.9 MB",
                    "languages": ["en", "de", "fr", "es", "it", "nl", "pl"]},
         "language": cfg.get("language") or "auto-detect",
+        "platform": {"os": _platform.os_name(), "desktop": _platform.desktop()},
+        "backends": {
+            "transcriber": transcriber_name(cfg),
+            "transcribers": list(_trans_available()),
+            "audio_source": audio_source_name(cfg),
+            "notifier": notifier_name(cfg),
+            "paste": list(_paste_available()),
+        },
         "paste": {
-            "wtype": have("wtype"), "wl-copy": have("wl-copy"),
-            "hyprctl": have("hyprctl"), "method": paste_method(cfg),
+            "wtype": _platform.have("wtype"), "wl-copy": _platform.have("wl-copy"),
+            "hyprctl": _platform.have("hyprctl"), "method": paste_method(cfg),
         },
     }
     print(json.dumps(st, indent=2 if not args.json else None, ensure_ascii=False))
@@ -197,14 +239,14 @@ def cmd_history(args) -> int:
 
 
 def cmd_paste_last(args) -> int:
-    from .paste import paste_text
+    from .paste_backends import get_backend as get_paste_backend
     ensure_dirs()
     cfg = load_config()
     t = hist.last_text()
     if not t:
         print("no dictations yet", flush=True)
         return 1
-    m = paste_text(t, method=paste_method(cfg))
+    m = get_paste_backend(cfg).paste(t)
     print(format_result({"ok": True, "text": t, "method": m.method,
                          "delivered": m.delivered},
                         paste=True, print_text=False), flush=True)
@@ -212,8 +254,11 @@ def cmd_paste_last(args) -> int:
 
 
 def cmd_devices(args) -> int:
-    from .audio import list_sources
-    print(list_sources(), flush=True)
+    from .audio_sources import get_source
+    ensure_dirs()
+    cfg = load_config()
+    print(get_source({**cfg, "audio_source": audio_source_name(cfg)}).list_sources(),
+          flush=True)
     return 0
 
 
@@ -222,11 +267,12 @@ def cmd_mic_test(args) -> int:
     import time
     import numpy as np
     import sounddevice as sd
-    from .audio import resolve_mic
+    from .audio_sources import get_source
     ensure_dirs()
     cfg = load_config()
+    audio = get_source({**cfg, "audio_source": audio_source_name(cfg)})
     try:
-        mic_dev = resolve_mic(cfg.get("mic"))
+        mic_dev = audio.resolve_mic(cfg.get("mic"))
     except Exception as e:
         print(str(e), flush=True)
         return 2
