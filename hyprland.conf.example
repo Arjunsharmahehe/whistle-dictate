@@ -1,0 +1,13 @@
+# Toggle: one keypress to start, press again to stop + paste at cursor.
+# (True hold needs bindr, which Hyprland 0.57 Lua doesn't expose — toggle is
+# also what Hex docs recommend: release timing is unreliable with modifiers.)
+bind = ALT, Space, exec, /home/arjun/Projects/personal/whistle-dictate/.venv/bin/whistle-dictate toggle
+bind = CTRL, Space, exec, /home/arjun/Projects/personal/whistle-dictate/.venv/bin/whistle-dictate toggle
+bind = , End, exec, /home/arjun/Projects/personal/whistle-dictate/.venv/bin/whistle-dictate toggle
+# NOTE: this box runs Hyprland 0.57 Lua, so the live binds are in
+# ~/.config/hypr/config/binds.lua:
+#   hl.bind("ALT + Space", hl.dsp.exec_cmd(WD .. " toggle"))
+
+# Pre-download Whistle's 16.9 MB .cact at login so the first dictation is instant
+# (live line is in ~/.config/hypr/config/autostart.lua):
+#   hl.exec_cmd(".../whistle-dictate warm")
